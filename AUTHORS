@@ -29,3 +29,6 @@ Jan Wrona (@jwrona) contributed the OCF Resource Agent script.
 
 Charles Bueche (@cbueche) <bueche@netnea.com> added the systemd
 startup script.
+
+Brian Groux (@brian-groux-hootsuite) <brian.groux@hootsuite.com> contributed
+multithreading, port sharding and asynchrnous sending.
