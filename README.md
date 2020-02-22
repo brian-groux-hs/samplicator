@@ -72,3 +72,29 @@ where:
 Receivers specified on the command line will get all packets, those
 specified in the config-file will get only packets with a matching
 source.
+
+
+AT SCALE
+---------
+
+When running samplicator at scale you may discover excessive UDP packet loss.
+To combat data loss and enable higher throughput the following features were
+added:
+
+- multi threaded receive
+- port sharding (each thread shares the IP/recv port)
+- asynchronous transmission using transient threads
+- buffering of transmit data
+
+Multi-threaded receiving can be enabled using the `-w N` option where N
+is the number of worker threads. Multi-threaded receiving may be used with
+both synchronous (default) and asynchronous transmission depening on
+throughput requirements. With synchronous transmission recv threads will block
+until transmission compeltes.
+
+Asynchronous transmission can be enabled using the `-a` option. When coupled
+with the `-w-` option for multi-threaded recieve this provides maximum
+throughput. When transmitting data asynchornously incoming data is buffered
+until the threshold set with `-f N` (default 32Kb) is reached. Once this
+threshold is met a seperate transmit thread will be spun up and detached
+from the receive thread.

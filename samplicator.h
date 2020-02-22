@@ -21,15 +21,17 @@ struct samplicator_context {
   const char		       *fport_spec;
   long				sockbuflen;
   long				pdulen;
+  long				flush_threshold;
   int				debug;
   int				timeout;
   int				fork;
   int				ipv4_only;
   int				ipv6_only;
+  int				workers;
+  int				async;
   const char		       *pid_file;
   enum receiver_flags		default_receiver_flags;
 
-  int				fsockfd;
   socklen_t			fsockaddrlen;
 
   const char		       *config_file_name;
@@ -38,6 +40,14 @@ struct samplicator_context {
   /* statistics */
   uint32_t			unmatched_packets;
 };
+
+typedef
+struct receive_work_unit {
+  struct sockaddr_storage remote_address;
+  struct samplicator_context *ctx;
+  unsigned char *buffer;
+
+} receive_work_unit_t;
 
 struct receiver {
   int				fd;
