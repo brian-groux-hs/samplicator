@@ -13,4 +13,9 @@ AC_DEFINE([HAVE_STRUCT_IP], 1,
 	  [Define if the system has `struct ip'.])
 AC_DEFINE([HAVE_STRUCT_IPHDR], 1,
 	  [Define if the system has `struct iphdr'.])
+AC_CONFIG_MACRO_DIR(.)
+AX_PTHREAD
+LIBS="$PTHREAD_LIBS $LIBS"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+CC="$PTHREAD_CC"
 AC_OUTPUT(Makefile)

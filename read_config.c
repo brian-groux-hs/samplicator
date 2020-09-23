@@ -49,6 +49,7 @@
 
 #define DEFAULT_SOCKBUFLEN 65536
 #define DEFAULT_PDULEN 65536
+#define DEFAULT_FLUSH_THRESHOLD 32768
 
 #define MAX_PEERS 100
 #define MAX_LINELEN 8000
@@ -73,7 +74,7 @@ parse_error (const struct samplicator_context *ctx, const char *fmt, ...)
   va_end (fmt_args);
   return -1;
 }
-  
+
 
 /* copy_string_start_end (start, end)
 
@@ -138,7 +139,7 @@ read_cf_file (file, ctx)
 	{
 	  break;
 	}
-	
+
       ++ctx->config_file_lineno;
       if (parse_line (ctx, tmp_s, tmp_s + strlen (tmp_s)) == -1)
 	{
@@ -468,7 +469,7 @@ parse_line (ctx, start, end)
 	  if (c < end)
 	    c++;
 	}
-      if (argc > 0) 
+      if (argc > 0)
 	{
 	  if (parse_receivers (argc, argv, ctx, sctx) == -1)
 	    {
@@ -497,7 +498,7 @@ parse_receiver (struct receiver *receiverp,
   receiverp->flags = ctx->default_receiver_flags;
   receiverp->freqcount = 0;
   receiverp->freq = 1;
-  receiverp->ttl = DEFAULT_TTL; 
+  receiverp->ttl = DEFAULT_TTL;
 
   start = arg; end = start + strlen (arg);
   while (start < end && isspace (*start))
@@ -728,8 +729,36 @@ parse_receivers (argc, argv, ctx, sctx)
       struct source_context *ptr;
       for (ptr = ctx->sources; ptr->next != NULL; ptr = ptr->next);
       ptr->next = sctx;
-    } 
+    }
   return 0;
+}
+
+void
+verify_args(ctx)
+    struct samplicator_context *ctx;
+{
+  // frequency in mutli threaded mode is not supported due to complexities around locking
+  if (ctx->workers > 1)
+  {
+    int numrecvrs = ctx->sources->nreceivers;
+    int i;
+    // check if any reciever has a freq set
+    for ( i = 0 ; i < numrecvrs ; i++)
+    {
+      if(ctx->sources->receivers[i].freq != 1)
+      {
+        fprintf (stderr, "Cannot use receiver frequency when in  multithreaded mode.\n");
+        exit (1);
+      }
+
+    }
+
+    // when in multi threaded mode, check the buffer sizes are sane
+    if (ctx->pdulen > ctx->flush_threshold) {
+        fprintf (stderr, "PDU length(%ld) > flush threshold(%ld).\n", ctx->pdulen, ctx->flush_threshold);
+        exit (1);
+    }
+  }
 }
 
 int
@@ -766,6 +795,9 @@ parse_args (argc, argv, ctx)
   ctx->ipv4_only = 0;
   ctx->ipv6_only = 0;
   ctx->fork = 0;
+  ctx->workers = 1;
+  ctx->async = 0;
+  ctx->flush_threshold = DEFAULT_FLUSH_THRESHOLD;
   ctx->pid_file = (const char *) 0;
   ctx->sources = 0;
   ctx->default_receiver_flags = pf_CHECKSUM;
@@ -777,10 +809,19 @@ parse_args (argc, argv, ctx)
   sctx->tx_delay = 0;
 
   optind = 1;
-  while ((i = getopt (argc, (char **) argv, "hu:b:d:t:m:p:s:x:c:fSn46")) != -1)
+  while ((i = getopt (argc, (char **) argv, "hu:b:d:t:m:p:s:x:c:w:l:fSna46")) != -1)
     {
       switch (i)
 	{
+  case 'a': /* async */
+    ctx->async = 1;
+    break;
+  case 'w': /* workers */
+    ctx->workers = atoi (optarg);
+    break;
+  case 'l': /* flush threshold */
+    ctx->flush_threshold = atol (optarg);
+    break;
 	case 'b': /* buflen */
 	  ctx->sockbuflen = atol (optarg);
 	  break;
@@ -846,6 +887,7 @@ parse_args (argc, argv, ctx)
 	  return -1;
 	}
     }
+  verify_args(ctx);
   return 0;
 }
 
@@ -879,6 +921,9 @@ Supported options:\n\
   -6                       IPv6 only\n\
   -h                       print this usage message and exit\n\
   -u <pdulen>              size of max pdu on listened socket (default 65536)\n\
+  -a                       asynchronous sending, buffers datagrams then sends off thread\n\
+  -l <flush threshold>     data to buffer, in bytes, before sending (default 32768) Only works with -a\n\
+  -w <thread count>        number of worker threads (default = 1) Port/IP reused/sharded across threads\n\
 \n\
 Specifying receivers:\n\
 \n\
@@ -886,7 +931,7 @@ Specifying receivers:\n\
 where:\n\
   A.B.C.D                  is the receiver's IP address\n\
   port                     is the UDP port to send to (default %s)\n\
-  freq                     is the sampling rate (default 1)\n\
+  freq                     is the sampling rate, not available when -w is specified. (default 1)\n\
   ttl                      is the outgoing packets' TTL value (default %d)\n\
 \n\
 The port can be a number, a range, or a number plus the number of instances:\n\
